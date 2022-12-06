@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { View, Text, StyleSheet, Button, Image } from "react-native";
+import { collection, addDoc, getFirestore } from "firebase/firestore";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import { TextInput } from "react-native-paper";
@@ -12,15 +13,32 @@ export default function SignUp({ navigation }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-
+  const db = getFirestore();
   function RegisterUser() {
-    createUserWithEmailAndPassword(
-      authentication,
-      email.trim(),
-      password.trim()
-    ).then((re) => {
-      console.log(re);
-    });
+    try {
+      if (password === confirmPassword) {
+        createUserWithEmailAndPassword(
+          authentication,
+          email.trim(),
+          password.trim()
+        )
+          .then((re) => {
+            console.log("User has successfully logged in");
+          })
+          .then(async () => {
+            await addDoc(collection(db, "users"), {
+              firstName: firstName,
+              lastName: lastName,
+              email: email.toLowerCase().trim(),
+              timeStamp: Date.now(),
+            });
+          });
+      } else {
+        console.log("passwords did not match");
+      }
+    } catch (error) {
+      console.error(error);
+    }
     // try {
     //   if (password === confirmPassword) {
     //     createUserWithEmailAndPassword(
