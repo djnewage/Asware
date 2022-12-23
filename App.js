@@ -1,16 +1,14 @@
 import * as React from "react";
-import { StatusBar } from "expo-status-bar";
-import { StyleSheet, Text, View, SafeAreaView } from "react-native";
-import { TextInput, BottomNavigation } from "react-native-paper";
 import { NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+
 import Login from "./Screens/Login";
 import SignUp from "./Screens/SignUp";
 import Home from "./Screens/Home";
-import { authentication } from "./firebase/firebase-config";
 
 const Stack = createNativeStackNavigator();
-export default function App() {
+export default function App({ navigtion }) {
   return (
     <NavigationContainer>
       <Stack.Navigator>

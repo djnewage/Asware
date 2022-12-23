@@ -1,11 +1,15 @@
 import React, { useState } from "react";
-import { View, Text, StyleSheet, Button, Image } from "react-native";
-import { collection, addDoc, getFirestore } from "firebase/firestore";
+import { View, Text, StyleSheet, Button, TouchableOpacity } from "react-native";
+import * as ImagePicker from "expo-image-picker";
+import { getAuth, signInWithEmailAndPassword } from "firebase/auth";
+import { setDoc, getFirestore, doc } from "firebase/firestore";
+import { ref, uploadBytes, getDownloadURL, getStorage } from "firebase/storage";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import { TextInput } from "react-native-paper";
-import { authentication } from "../firebase/firebase-config";
+import { authentication, storage, firebase } from "../firebase/firebase-config";
 import { createUserWithEmailAndPassword } from "firebase/auth";
+import { ProfileImage } from "../components/ProfileImage";
 
 export default function SignUp({ navigation }) {
   const [firstName, setFirstName] = useState("");
@@ -13,79 +17,110 @@ export default function SignUp({ navigation }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [image, setImage] = useState(null);
+  const [url, setUrl] = useState(null);
+  const [errors, setErrors] = useState({});
+
   const db = getFirestore();
+
+  const uploadImage = async (user) => {
+    const storage = getStorage();
+    const storageRef = ref(storage, `${user.user.uid}/ProfileImg`);
+    const img = await fetch(image);
+    const bytes = await img.blob();
+    const data = await uploadBytes(storageRef, bytes);
+    console.log("test data:", data);
+  };
+
+  const getImage = async (user) => {
+    try {
+      const storage = getStorage();
+      const url = await getDownloadURL(
+        ref(storage, `${user.user.uid}/ProfileImg`)
+      );
+
+      return url;
+    } catch (error) {
+      console.log(error);
+    }
+  };
+
   function RegisterUser() {
     try {
+      if (
+        !password ||
+        !firstName ||
+        !lastName ||
+        !email ||
+        !image ||
+        !confirmPassword
+      ) {
+        setErrors({ allFieldsAreRequired: "All Fields Are Required" });
+      }
       if (password === confirmPassword) {
         createUserWithEmailAndPassword(
           authentication,
           email.trim(),
           password.trim()
         )
-          .then((re) => {
-            console.log("User has successfully logged in");
-          })
-          .then(async () => {
-            await addDoc(collection(db, "users"), {
+          .then(async (user) => {
+            await uploadImage(user);
+            const url = await getImage(user);
+            await setDoc(doc(db, "users", user.user.uid), {
               firstName: firstName,
               lastName: lastName,
               email: email.toLowerCase().trim(),
+              image: url,
               timeStamp: Date.now(),
             });
+          })
+          .then((re) => {
+            navigation.navigate("Home");
+            console.log("User has successfully logged in");
           });
       } else {
+        setErrors({ passwordsDoNotMatch: "Passwords did not match " });
         console.log("passwords did not match");
       }
     } catch (error) {
       console.error(error);
     }
-    // try {
-    //   if (password === confirmPassword) {
-    //     createUserWithEmailAndPassword(
-    //       authentication,
-    //       email.trim(),
-    //       password.trim()
-    //     )
-    //       .then((re) => {
-    //         console.log(re);
-    //       })
-    //       // .then(async ({ user }) => {
-    //       //   await firestore().collection("users").doc(user.uid).set({
-    //       //     id: user.uid,
-    //       //     firstName: data.firstName,
-    //       //     lastName: data.lastName,
-    //       //     email: data.email.toLowerCase().trim(),
-    //       //     //   isTestUser: __DEV__,
-    //       //     //   timeStamp: Date.now(),
-    //       //     //   hasOnboarded: false,
-    //       //   });
-    //       //   await analytics().logEvent("user_created");
-    //       //   console.log("User account created & signed in!");
-    //       // })
-    //       .catch((error) => {
-    //         if (error.code === "auth/email-already-in-use") {
-    //           console.log("That email address is already in use!", error);
-    //         }
-    //         if (error.code === "auth/invalid-email") {
-    //           console.log("That email address is invalid!", error);
-    //         }
-    //       });
-    //   } else {
-    //     setError("passwordConfirmed", { msg: "Passwords don't match" });
-    //   }
-    // } catch (err) {
-    //   console.error(err.code);
-    // }
   }
+
+  const pickImage = async () => {
+    // No permissions request is necessary for launching the image library
+    let result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.All,
+      allowsEditing: true,
+      aspect: [4, 3],
+      quality: 1,
+    });
+
+    console.log(result.uri);
+
+    if (!result.canceled) {
+      try {
+        await setImage(result.uri);
+      } catch (error) {
+        console.log(error);
+      }
+    }
+  };
 
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.textContainer}>
+        <TouchableOpacity onPress={pickImage}>
+          <ProfileImage source={image} size={100} />
+        </TouchableOpacity>
+        <Text>Upload photo</Text>
+      </View>
+      {/* <View style={styles.textContainer}>
         <Image
           style={styles.logo}
           source={require("../assets/aswarelogoblue.png")}
         />
-      </View>
+      </View> */}
       <View>
         <TextInput
           style={styles.emailInput}
@@ -117,6 +152,26 @@ export default function SignUp({ navigation }) {
           value={confirmPassword}
           onChangeText={(text) => setConfirmPassword(text)}
         />
+        {errors.allFieldsAreRequired && (
+          <Text
+            style={{
+              color: "red",
+              textAlign: "center",
+            }}
+          >
+            {errors.allFieldsAreRequired}
+          </Text>
+        )}
+        {errors.passwordsDoNotMatch && (
+          <Text
+            style={{
+              color: "red",
+              textAlign: "center",
+            }}
+          >
+            {errors.passwordsDoNotMatch}
+          </Text>
+        )}
       </View>
       <View>
         <Button title="Create Account" onPress={RegisterUser} />
@@ -132,7 +187,7 @@ const styles = StyleSheet.create({
     // top: 50,
   },
   textContainer: {
-    // backgroundColor: "#fff",
+    display: "flex",
     alignItems: "center",
     justifyContent: "center",
     marginBottom: 50,
